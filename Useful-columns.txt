@@ -1,0 +1,28 @@
+1. Company :
+Company name
+Values : ['TISL', 'TISL - DUBAI']
+
+2. Territory :
+Location of customer (Country or state)
+
+3. Customer:
+Customer Name
+
+4. Customer Type
+Type of customer
+
+5. InvDate
+Date of invoice
+
+6. NetAmt
+Amount of sale
+
+7. qtynos
+quantity
+
+8. Product family
+type of product (I think)
+Values : ['VIO', 'ANG', 'CTC', 'TSL', 'TDL', 'DOP', 'ICTP', nan, 'DIG', 'MET']
+
+9. Manufacturer or Trading
+Values : ['MFG', 'TRD']

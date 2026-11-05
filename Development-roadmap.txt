@@ -1,0 +1,129 @@
+Development roadmap
+Sales forecasting for plates, using only the columns in Useful-columns.txt.
+
+What we will forecast
+- Monthly quantity (qtynos) for the next 12 months.
+- Monthly sales value (NetAmt) estimated from forecasted quantity and recent average price.
+- Series grain:
+  Company x Customer x Product Family x Manufacturer or Trading x Month
+- Territory and Customer Type stay as attributes of each series, not extra forecast keys.
+
+What we will not do in this version
+- Do not use the Product column. Every row is "PLATES", so it does not split demand.
+- Do not forecast at item / product-code level. That column is not in the useful list and would create too many sparse series.
+- Do not train two model families at once. Start with one global model.
+- Do not build a dashboard yet. Deliver forecasts as Parquet plus a small Excel summary.
+- Do not use statistical reconciliation methods. Roll totals up by summing the detailed forecasts.
+
+Columns we will keep
+1. Company                  TISL, TISL - DUBAI
+2. Territory                country or state of the customer
+3. Customer                 customer name
+4. Customer Type            type of customer
+5. InvDate                  invoice date, converted to month
+6. NetAmt                   sales value
+7. qtynos                   quantity
+8. Product Family           VIO, ANG, CTC, TSL, TDL, DOP, ICTP, DIG, MET (and missing)
+9. Manufacturer or Trading  MFG, TRD
+
+
+Step 1 — Clean the useful columns
+
+Read Merged_sales_data.parquet and keep only the nine columns above.
+
+- Strip spaces and standardize text in Company, Territory, Customer, Customer Type, Product Family, and Manufacturer or Trading.
+- Convert InvDate to a real date, then to a month (first day of month).
+- Convert qtynos and NetAmt to numbers. Rows that cannot be converted are dropped.
+- Keep negative quantity or value. They are returns and should reduce the monthly total.
+- Missing Product Family: count it first. If it is rare, drop those rows. If it is common, label it "Unknown" and keep it.
+- Save the cleaned invoice-level data as Cleaned_sales_data.parquet.
+
+
+Step 2 — Build the monthly series
+
+Aggregate to:
+Company x Customer x Product Family x Manufacturer or Trading x Month
+
+For each group calculate:
+- qty            sum of qtynos
+- net_amt        sum of NetAmt
+- invoice_count  number of invoice rows
+- avg_price      net_amt / qty when qty is not zero
+
+Attach Territory and Customer Type as the most frequent value inside that group.
+If a customer is tied to more than one territory or type, keep the most frequent one and note the conflict during EDA.
+
+Fill missing months inside each series with qty = 0 and net_amt = 0, from the first month that series appears through the latest month in the data. This matters because many customers do not buy every month.
+
+Save as Monthly_sales.parquet.
+
+
+Step 3 — Exploratory analysis
+
+Answer these questions before modeling. Use group totals, pivots, and time plots. Correlation alone is not enough.
+
+- Company: how TISL and TISL - DUBAI differ in quantity and value.
+- Territory: which territories contribute the most, and whether they are growing.
+- Customer Type: which types produce more quantity and value.
+- Product Family x Territory: which families sell where.
+- Customer x Product Family: which families each large customer buys, and how often.
+- Manufacturer or Trading: MFG vs TRD quantity, value, and trend.
+- Quantity vs NetAmt: whether value moves with quantity or is driven by price.
+- Month: seasonal pattern and which months are strong or weak.
+- Intermittent demand: share of series with many zero months.
+- Concentration: share of quantity held by the top customers.
+
+Save a short EDA note in the notebook. Change the grain only if EDA shows Manufacturer or Trading does not split demand.
+
+
+Step 4 — Features
+
+Build features only from months before the month being predicted.
+
+From history, for both qty and net_amt:
+- lag_1, lag_2, lag_3, lag_6, lag_12
+- rolling mean of the previous 3, 6, and 12 months
+- active_months_12: how many of the last 12 months had qty > 0
+- months_since_last_sale
+
+From the calendar:
+- month number
+- quarter
+
+From the series attributes (known before the month):
+- Company
+- Territory
+- Customer Type
+- Product Family
+- Manufacturer or Trading
+
+Do not use same-month qty, NetAmt, invoice_count, or avg_price as inputs. Those are the result we are predicting.
+
+
+Step 5 — Train and compare
+
+Primary target: monthly qty.
+Value: forecast qty multiplied by that series' average price over the previous 3 non-zero months. Add a separate NetAmt model only if that price estimate is clearly poor.
+
+Models:
+1. Seasonal naive: same month last year, or last month if last year is missing.
+2. LightGBM global model on all series together.
+
+Split by time, not at random. Hold out the last 6 months as the first test. If that looks stable, check one earlier 6-month window.
+
+Compare with MAE and WAPE (weighted absolute percentage error) on quantity. Also report error after summing to Customer, Product Family, Territory, and Company.
+
+Keep LightGBM if it beats seasonal naive on the holdout. Try CatBoost only if LightGBM does not.
+
+
+Step 6 — Produce the 12-month forecast
+
+- Forecast the next 12 months at the series grain.
+- Build each future month using lags from history plus previously forecasted months.
+- Aggregate by summing to Customer, Product Family, Territory, and Company.
+- Also give cumulative quantity and value for 1, 3, 6, and 12 months.
+- Save:
+  Forecast_monthly.parquet   one row per series per future month
+  Forecast_summary.xlsx      the four aggregate views
+
+Uncertainty ranges and a dashboard come after this forecast is trusted.

@@ -1,0 +1,19 @@
+1. Customer-wise sales forecasting
+
+Predict the value and quantity each customer will purchase over the next 1, 3, 6, or 12 months.
+
+Example: Expected monthly sales for customer code 231240, including growth or decline against the previous year.
+
+
+2. Product-wise sales forecasting
+
+Predict future sales quantities and amounts for each individual SKU (sdlitm), along with demand for a product family.
+
+Example: Forecast future demand for IB45789 and the entire VioStar product family.
+
+
+3. Customer × Product forecasting
+
+Predict which products a particular customer is likely to purchase, in what quantity, and when.
+
+Example: Customer 231240 may purchase 500 units of Product A and 800 units of Product B next month.
